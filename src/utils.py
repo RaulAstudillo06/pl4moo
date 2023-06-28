@@ -1,5 +1,6 @@
+import numpy as np
 import torch
-from botorch.acquisition import AcquisitionFunction,  PosteriorMean
+from botorch.acquisition import AcquisitionFunction, PosteriorMean
 from botorch.generation.gen import get_best_candidates
 from botorch.fit import fit_gpytorch_mll
 from botorch.models.model import Model
@@ -8,14 +9,19 @@ from botorch.models.likelihoods import PairwiseLogitLikelihood, PairwiseProbitLi
 from botorch.optim.optimize import optimize_acqf
 from torch import Tensor
 from torch.distributions import Bernoulli, Normal, Gumbel
-from typing import Optional
-
+from typing import Optional, Callable
 from src.models.pairwise_kernel_variational_gp import PairwiseKernelVariationalGP
+from src.models.composite_model import CompositePreferentialGP
+from src.pymoo_problem import PymooProblem
+
+from pymoo.algorithms.soo.nonconvex.ga import GA
+from pymoo.optimize import minimize as pymoo_minimize
 
 
 def fit_model(
     queries: Tensor,
     responses: Tensor,
+    attribute_func: Callable,
     model_type: str,
     likelihood: Optional[str] = "logit",
 ):
@@ -41,7 +47,7 @@ def fit_model(
     elif model_type == "pairwise_kernel_variational_gp":
         model = PairwiseKernelVariationalGP(queries, responses)
     elif model_type == "composite_preferential_gp":
-        model = PairwiseKernelVariationalGP(queries, responses)
+        model = CompositePreferentialGP(queries, responses, attribute_func)
     return model
 
 
@@ -57,7 +63,9 @@ def generate_initial_data(
 ):
     # generates initial data
     queries = generate_random_queries(num_queries, batch_size, input_dim, seed)
-    attribute_vals, utility_vals = get_attribute_and_utility_vals(queries, attribute_func, utility_func)
+    attribute_vals, utility_vals = get_attribute_and_utility_vals(
+        queries, attribute_func, utility_func
+    )
     responses = generate_responses(utility_vals, comp_noise_type, comp_noise)
     return queries, attribute_vals, utility_vals, responses
 
@@ -143,34 +151,52 @@ def optimize_acqf_and_get_suggested_query(
 ) -> Tensor:
     """Optimizes the acquisition function, and returns the candidate solution."""
 
-    candidates, acq_values = optimize_acqf(
-        acq_function=acq_func,
-        bounds=bounds,
-        q=batch_size,
-        num_restarts=num_restarts,
-        raw_samples=raw_samples,
-        batch_initial_conditions=batch_initial_conditions,
-        options={
-            "batch_limit": batch_limit,
-            "init_batch_limit": init_batch_limit,
-            "maxiter": 100,
-            "nonnegative": False,
-            "method": "L-BFGS-B",
-        },
-        return_best_only=False,
+    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    aug_bounds = torch.cat([bounds for _ in range(batch_size)], dim=-1)
+    problem = PymooProblem(
+        var=aug_bounds.shape[-1], bounds=aug_bounds.numpy(), acq_function=acq_func
     )
+    algorithm = GA(pop_size=5 * aug_bounds.shape[-1], eliminate_duplicates=True)
 
-    candidates = candidates.detach()
-    #acq_values_sorted, indices = torch.sort(acq_values.squeeze(), descending=True)
-    # print("Acquisition values:")
-    # print(acq_values_sorted)
-    # print("Candidates:")
-    # print(candidates[indices].squeeze())
-    # print(candidates.squeeze())
-    #print(candidates.shape)
-    #print(acq_values.shape)
-    new_x = get_best_candidates(batch_candidates=candidates, batch_values=acq_values)
-    #print(new_x)
+    res = pymoo_minimize(problem, algorithm, verbose=True)
+    new_x = res.X
+    new_x = torch.from_numpy(new_x)
+    if batch_size > 1:
+        new_x = new_x.reshape(
+            2,
+            int(new_x.shape[-1] / 2),
+        )
+    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+    # candidates, acq_values = optimize_acqf(
+    #     acq_function=acq_func,
+    #     bounds=bounds,
+    #     q=batch_size,
+    #     num_restarts=num_restarts,
+    #     raw_samples=raw_samples,
+    #     batch_initial_conditions=batch_initial_conditions,
+    #     options={
+    #         "batch_limit": batch_limit,
+    #         "init_batch_limit": init_batch_limit,
+    #         "maxiter": 100,
+    #         "nonnegative": False,
+    #         "method": "L-BFGS-B",
+    #     },
+    #     return_best_only=False,
+    # )
+    #
+    # candidates = candidates.detach()
+    # # acq_values_sorted, indices = torch.sort(acq_values.squeeze(), descending=True)
+    # # print("Acquisition values:")
+    # # print(acq_values_sorted)
+    # # print("Candidates:")
+    # # print(candidates[indices].squeeze())
+    # # print(candidates.squeeze())
+    # # print(candidates.shape)
+    # # print(acq_values.shape)
+    # new_x = get_best_candidates(batch_candidates=candidates, batch_values=acq_values)
+    # print(new_x)
+
     return new_x
 
 
@@ -179,7 +205,6 @@ def compute_posterior_mean_maximizer(
     model_type,
     input_dim: int,
 ) -> Tensor:
-
     standard_bounds = torch.tensor([[0.0] * input_dim, [1.0] * input_dim])
     num_restarts = 4 * input_dim
     raw_samples = 120 * input_dim

@@ -24,32 +24,38 @@ input_dim = 5
 num_attributes = 3
 
 attribute_bounds = torch.tensor(
-            [
-                [-1.7040e03, -1.1708e01, -2.6192e-01],
-                [-1.6619e03, -6.2136e00, -4.2879e-02],
-            ]
-        )
+    [
+        [-1.7040e03, -1.1708e01, -2.6192e-01],
+        [-1.6619e03, -6.2136e00, -4.2879e-02],
+    ]
+)
 
 vehiclesafety_func = VehicleSafety(negate=True)
+
 
 def attribute_func(X: Tensor) -> Tensor:
     X_unscaled = 2.0 * X + 1.0
     output = vehiclesafety_func(X_unscaled)
-    output = (output - attribute_bounds[0, :]) / (attribute_bounds[1, :] - attribute_bounds[0, :])
+    output = (output - attribute_bounds[0, :]) / (
+        attribute_bounds[1, :] - attribute_bounds[0, :]
+    )
     return output
 
+
 normalized_attribute_bounds = torch.tensor(
-            [
-                [0, 0, 0],
-                [1, 1, 1],
-            ]
-        )
+    [
+        [0, 0, 0],
+        [1, 1, 1],
+    ]
+)
 concentration1 = torch.tensor([0.5, 1, 1.5])
 concentration2 = torch.tensor([1.0, 2.0, 3.0])
 
 utility_func = KumaraswamyCDFProduct(
-                concentration1=concentration1, concentration2=concentration2, Y_bounds=normalized_attribute_bounds
-            )
+    concentration1=concentration1,
+    concentration2=concentration2,
+    Y_bounds=normalized_attribute_bounds,
+)
 
 # Algos
 algo = "EUBO"
@@ -79,7 +85,7 @@ experiment_manager(
     model_type=model_type,
     batch_size=2,
     num_init_queries=4 * input_dim,
-    num_algo_iter=2,
+    num_algo_iter=100,
     first_trial=first_trial,
     last_trial=last_trial,
     restart=False,

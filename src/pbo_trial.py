@@ -23,12 +23,12 @@ from src.utils import (
     get_attribute_and_utility_vals,
     generate_responses,
     optimize_acqf_and_get_suggested_query,
-    compute_posterior_mean_maximizer
+    compute_posterior_mean_maximizer,
 )
 
 
 # this function runs a single trial of a given problem
-# see more details about the arguments in experiment_manager.py 
+# see more details about the arguments in experiment_manager.py
 def pbo_trial(
     problem: str,
     attribute_func: Callable,
@@ -47,7 +47,6 @@ def pbo_trial(
     ignore_failures: bool,
     algo_params: Optional[Dict] = None,
 ) -> None:
-
     algo_id = algo + "_" + model_type
 
     # get script directory
@@ -69,10 +68,17 @@ def pbo_trial(
             )
             queries = torch.tensor(queries)
             attribute_vals = torch.tensor(
-                np.loadtxt(results_folder + "attribute_vals/attribute_vals_" + str(trial) + ".txt")
+                np.loadtxt(
+                    results_folder
+                    + "attribute_vals/attribute_vals_"
+                    + str(trial)
+                    + ".txt"
+                )
             )
             attribute_vals = attribute_vals.reshape(
-                attribute_vals.shape[0], batch_size, int(attribute_vals.shape[1] / batch_size)
+                attribute_vals.shape[0],
+                batch_size,
+                int(attribute_vals.shape[1] / batch_size),
             )
             utility_vals = torch.tensor(
                 np.loadtxt(
@@ -116,6 +122,7 @@ def pbo_trial(
             model = fit_model(
                 queries,
                 responses,
+                attribute_func=attribute_func,
                 model_type=model_type,
                 likelihood=comp_noise_type,
             )
@@ -143,6 +150,7 @@ def pbo_trial(
             model = fit_model(
                 queries,
                 responses,
+                attribute_func=attribute_func,
                 model_type=model_type,
                 likelihood=comp_noise_type,
             )
@@ -150,9 +158,11 @@ def pbo_trial(
             model_training_time = t1 - t0
 
             # historical utility values at the maximum of the posterior mean
-            posterior_mean_maximizer = compute_posterior_mean_maximizer(model=model, model_type=model_type, input_dim=input_dim)
+            posterior_mean_maximizer = compute_posterior_mean_maximizer(
+                model=model, model_type=model_type, input_dim=input_dim
+            )
             utility_val_at_max_post_mean = utility_func(
-            attribute_func(posterior_mean_maximizer)
+                attribute_func(posterior_mean_maximizer)
             ).item()
             utility_vals_at_max_post_mean = [utility_val_at_max_post_mean]
 
@@ -182,6 +192,7 @@ def pbo_trial(
         model = fit_model(
             queries,
             responses,
+            attribute_func=attribute_func,
             model_type=model_type,
             likelihood=comp_noise_type,
         )
@@ -189,9 +200,11 @@ def pbo_trial(
         model_training_time = t1 - t0
 
         # historical utility values at the maximum of the posterior mean
-        posterior_mean_maximizer = compute_posterior_mean_maximizer(model=model, model_type=model_type, input_dim=input_dim)
+        posterior_mean_maximizer = compute_posterior_mean_maximizer(
+            model=model, model_type=model_type, input_dim=input_dim
+        )
         utility_val_at_max_post_mean = utility_func(
-        attribute_func(posterior_mean_maximizer)
+            attribute_func(posterior_mean_maximizer)
         ).item()
         utility_vals_at_max_post_mean = [utility_val_at_max_post_mean]
 
@@ -246,6 +259,7 @@ def pbo_trial(
         model = fit_model(
             queries,
             responses,
+            attribute_func=attribute_func,
             model_type=model_type,
             likelihood=comp_noise_type,
         )
@@ -253,9 +267,11 @@ def pbo_trial(
         model_training_time = t1 - t0
 
         # compute and append current utility value at the maximum of the posterior mean
-        posterior_mean_maximizer = compute_posterior_mean_maximizer(model=model, model_type=model_type, input_dim=input_dim)
+        posterior_mean_maximizer = compute_posterior_mean_maximizer(
+            model=model, model_type=model_type, input_dim=input_dim
+        )
         utility_val_at_max_post_mean = utility_func(
-        attribute_func(posterior_mean_maximizer)
+            attribute_func(posterior_mean_maximizer)
         ).item()
         utility_vals_at_max_post_mean.append(utility_val_at_max_post_mean)
         print(
@@ -288,8 +304,13 @@ def pbo_trial(
         np.savetxt(
             results_folder + "queries/queries_" + str(trial) + ".txt", queries_reshaped
         )
-        attribute_vals_reshaped = attribute_vals.numpy().reshape(attribute_vals.shape[0], -1)
-        np.savetxt(results_folder + "attribute_vals/attribute_vals_" + str(trial) + ".txt", attribute_vals_reshaped)
+        attribute_vals_reshaped = attribute_vals.numpy().reshape(
+            attribute_vals.shape[0], -1
+        )
+        np.savetxt(
+            results_folder + "attribute_vals/attribute_vals_" + str(trial) + ".txt",
+            attribute_vals_reshaped,
+        )
         np.savetxt(
             results_folder + "utility_vals/utility_vals_" + str(trial) + ".txt",
             utility_vals.numpy(),
@@ -311,6 +332,7 @@ def pbo_trial(
             np.atleast_1d(max_utility_vals_within_queries),
         )
 
+
 def get_new_suggested_query(
     algo: str,
     model: Model,
@@ -318,7 +340,6 @@ def get_new_suggested_query(
     input_dim: int,
     algo_params: Optional[Dict] = None,
 ) -> Tensor:
-
     standard_bounds = torch.tensor([[0.0] * input_dim, [1.0] * input_dim])
     num_restarts = 2 * input_dim * batch_size
     raw_samples = 60 * input_dim * batch_size

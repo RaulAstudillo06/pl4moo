@@ -85,6 +85,11 @@ class qExpectedMaxObjectiveValue(MCAcquisitionFunction):
     @concatenate_pending_points
     @t_batch_mode_transform()
     def forward(self, X: Tensor) -> Tensor:
+        X_reshaped = X.reshape(
+            X.shape[0],
+            2,
+            int(X.shape[-1] / 2),
+        )
         r"""Evaluate qNoisyExpectedImprovement on the candidate set `X`.
 
         Args:
@@ -96,7 +101,7 @@ class qExpectedMaxObjectiveValue(MCAcquisitionFunction):
             given design points `X`, where `batch_shape'` is the broadcasted batch shape
             of model and input `X`.
         """
-        posterior_X = self.model.posterior(X)
+        posterior_X = self.model.posterior(X_reshaped)
         Y_samples = self.sampler(posterior_X)
         obj_val_samples = self.objective(Y_samples)
         max_obj_val_samples = obj_val_samples.max(dim=-1).values
