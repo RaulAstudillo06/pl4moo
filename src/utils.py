@@ -158,7 +158,7 @@ def optimize_acqf_and_get_suggested_query(
     )
     algorithm = GA(pop_size=5 * aug_bounds.shape[-1], eliminate_duplicates=True)
 
-    res = pymoo_minimize(problem, algorithm, verbose=True)
+    res = pymoo_minimize(problem, algorithm, verbose=False)
     new_x = res.X
     new_x = torch.from_numpy(new_x)
     if batch_size > 1:
